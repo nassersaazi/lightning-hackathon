@@ -1,0 +1,299 @@
+version: "2"
+services:
+  integration-deps:
+    image: busybox
+    depends_on:
+      - kratos
+      - price
+      - price-history
+      - price-history-migrate
+      - stablesats
+      - redis
+      - mongodb
+      - postgres-price-history
+      - bitcoind
+      - lnd1
+      - lnd2
+      - lnd-outside-1
+      - lnd-outside-2
+      - otel-agent
+      - oathkeeper
+    restart: on-failure:10
+  otel-agent:
+    image: otel/opentelemetry-collector-contrib:0.61.0
+    command: ["--config=/etc/otel-agent-config.yaml"]
+    environment:
+      - HONEYCOMB_DATASET=${HONEYCOMB_DATASET}
+      - HONEYCOMB_API_KEY=${HONEYCOMB_API_KEY}
+    volumes:
+      - ./dev/otel-agent-config.yaml:/etc/otel-agent-config.yaml
+  price:
+    image: us.gcr.io/galoy-org/price:edge
+  price-history:
+    image: us.gcr.io/galoy-org/price-history:edge
+    command: ./scripts/run-servers-dev.sh
+    environment:
+      - DB_HOST=postgres-price-history
+      - DB_PORT=5432
+      - DB_USER=galoy-price-usr
+      - DB_PWD=galoy-price-pwd
+      - DB_DB=galoy-price-history
+      - DB_POOL_MIN=1
+      - DB_POOL_MAX=5
+      - DB_DEBUG=false
+    depends_on:
+      - postgres-price-history
+      - price-history-migrate
+  price-history-migrate:
+    image: us.gcr.io/galoy-org/price-history-migrate:edge
+    environment:
+      - DB_HOST=postgres-price-history
+      - DB_PORT=5432
+      - DB_USER=galoy-price-usr
+      - DB_PWD=galoy-price-pwd
+      - DB_DB=galoy-price-history
+      - DB_POOL_MIN=1
+      - DB_POOL_MAX=5
+      - DB_DEBUG=false
+    depends_on: [postgres-price-history]
+  redis:
+    image: bitnami/redis:6.2
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+  mongodb-migrate:
+    depends_on: [mongodb]
+    build:
+      context: .
+      dockerfile: Dockerfile-migrate
+    environment:
+      - MONGODB_ADDRESS=mongodb
+  mongodb:
+    image: bitnami/mongodb:4.4.6-debian-10-r0
+    environment:
+      - MONGODB_PASSWORD=password
+      - MONGODB_USERNAME=testGaloy
+      - MONGODB_DATABASE=galoy
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_ROOT_PASSWORD=password
+      - MONGODB_REPLICA_SET_KEY=replicasetkey
+  postgres-price-history:
+    image: postgres:14.1
+    environment:
+      - POSTGRES_USER=galoy-price-usr
+      - POSTGRES_PASSWORD=galoy-price-pwd
+      - POSTGRES_DB=galoy-price-history
+  bitcoind:
+    image: lncm/bitcoind:v23.0
+    volumes:
+      - ${PWD}/dev/bitcoind/bitcoin.conf:/data/.bitcoin/bitcoin.conf
+  lnd1:
+    image: lightninglabs/lnd:v0.15.3-beta
+    volumes:
+      - ${PWD}/dev/lnd/lnd.conf:/root/.lnd/lnd.conf
+      - ${PWD}/dev/lnd/tls.key:/root/.lnd/tls.key
+      - ${PWD}/dev/lnd/tls.cert:/root/.lnd/tls.cert
+      - ${PWD}/dev/lnd/regtest/lnd1.wallet.db:/root/.lnd/wallet.db
+      - ${PWD}/dev/lnd/regtest/lnd1.macaroons.db:/root/.lnd/macaroons.db
+      - ${PWD}/dev/lnd/regtest/lnd1.admin.macaroon:/root/.lnd/admin.macaroon
+    depends_on: [bitcoind]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /root/.lnd/data/chain/bitcoin/regtest/
+        cp /root/.lnd/wallet.db /root/.lnd/data/chain/bitcoin/regtest/wallet.db
+        cp /root/.lnd/macaroons.db /root/.lnd/data/chain/bitcoin/regtest/macaroons.db
+        cp /root/.lnd/admin.macaroon /root/.lnd/data/chain/bitcoin/regtest/admin.macaroon
+        /bin/lnd
+  lnd2:
+    image: lightninglabs/lnd:v0.15.3-beta
+    volumes:
+      - ${PWD}/dev/lnd/lnd.conf:/root/.lnd/lnd.conf
+      - ${PWD}/dev/lnd/tls.key:/root/.lnd/tls.key
+      - ${PWD}/dev/lnd/tls.cert:/root/.lnd/tls.cert
+      - ${PWD}/dev/lnd/regtest/lnd2.wallet.db:/root/.lnd/wallet.db
+      - ${PWD}/dev/lnd/regtest/lnd2.macaroons.db:/root/.lnd/macaroons.db
+      - ${PWD}/dev/lnd/regtest/lnd2.admin.macaroon:/root/.lnd/admin.macaroon
+    depends_on: [bitcoind]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /root/.lnd/data/chain/bitcoin/regtest/
+        cp /root/.lnd/wallet.db /root/.lnd/data/chain/bitcoin/regtest/wallet.db
+        cp /root/.lnd/macaroons.db /root/.lnd/data/chain/bitcoin/regtest/macaroons.db
+        cp /root/.lnd/admin.macaroon /root/.lnd/data/chain/bitcoin/regtest/admin.macaroon
+        /bin/lnd
+  lnd-outside-1:
+    image: lightninglabs/lnd:v0.15.3-beta
+    volumes:
+      - ${PWD}/dev/lnd/lnd.conf:/root/.lnd/lnd.conf
+      - ${PWD}/dev/lnd/tls.key:/root/.lnd/tls.key
+      - ${PWD}/dev/lnd/tls.cert:/root/.lnd/tls.cert
+      - ${PWD}/dev/lnd/regtest/lnd-outside-1.wallet.db:/root/.lnd/wallet.db
+      - ${PWD}/dev/lnd/regtest/lnd-outside-1.macaroons.db:/root/.lnd/macaroons.db
+      - ${PWD}/dev/lnd/regtest/lnd-outside-1.admin.macaroon:/root/.lnd/admin.macaroon
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /root/.lnd/data/chain/bitcoin/regtest/
+        cp /root/.lnd/wallet.db /root/.lnd/data/chain/bitcoin/regtest/wallet.db
+        cp /root/.lnd/macaroons.db /root/.lnd/data/chain/bitcoin/regtest/macaroons.db
+        cp /root/.lnd/admin.macaroon /root/.lnd/data/chain/bitcoin/regtest/admin.macaroon
+        /bin/lnd
+    depends_on: [bitcoind]
+  lnd-outside-2:
+    image: lightninglabs/lnd:v0.15.3-beta
+    volumes:
+      - ${PWD}/dev/lnd/lnd.conf:/root/.lnd/lnd.conf
+      - ${PWD}/dev/lnd/tls.key:/root/.lnd/tls.key
+      - ${PWD}/dev/lnd/tls.cert:/root/.lnd/tls.cert
+      - ${PWD}/dev/lnd/regtest/lnd-outside-2.wallet.db:/root/.lnd/wallet.db
+      - ${PWD}/dev/lnd/regtest/lnd-outside-2.macaroons.db:/root/.lnd/macaroons.db
+      - ${PWD}/dev/lnd/regtest/lnd-outside-2.admin.macaroon:/root/.lnd/admin.macaroon
+    depends_on: [bitcoind]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /root/.lnd/data/chain/bitcoin/regtest/
+        cp /root/.lnd/wallet.db /root/.lnd/data/chain/bitcoin/regtest/wallet.db
+        cp /root/.lnd/macaroons.db /root/.lnd/data/chain/bitcoin/regtest/macaroons.db
+        cp /root/.lnd/admin.macaroon /root/.lnd/data/chain/bitcoin/regtest/admin.macaroon
+        /bin/lnd
+  loopserver:
+    image: lightninglabs/loopserver:v0.9.52-beta
+    restart: unless-stopped
+    volumes:
+      - ${PWD}/dev/lnd/lnd.conf:/root/.lnd/lnd.conf
+      - ${PWD}/dev/lnd/tls.key:/root/.lnd/tls.key
+      - ${PWD}/dev/lnd/tls.cert:/root/.lnd/tls.cert
+      - ${PWD}/dev/lnd/loop/server/regtest:/root/.lnd/data/chain/bitcoin/regtest
+    depends_on:
+      - lnd-outside-1
+    command:
+      - "daemon"
+      - "--maxamt=5000000"
+      - "--lnd.host=lnd-outside-1:10009"
+      - "--lnd.macaroondir=/root/.lnd/data/chain/bitcoin/regtest"
+      - "--lnd.tlspath=/root/.lnd/tls.cert"
+  loopd1:
+    image: lightninglabs/loop:v0.20.1-beta
+    restart: unless-stopped
+    volumes:
+      - ${PWD}/dev/lnd/lnd.conf:/root/.lnd/lnd.conf
+      - ${PWD}/dev/lnd/tls.key:/root/.lnd/tls.key
+      - ${PWD}/dev/lnd/tls.cert:/root/.lnd/tls.cert
+      - ${PWD}/dev/lnd/regtest/lnd1.admin.macaroon:/root/.lnd/lnd1.admin.macaroon
+      - ${PWD}/dev/lnd/loop/regtest/loopd1-1.macaroons.db:/root/.loop/tmp/macaroons.db
+      - ${PWD}/dev/lnd/loop/regtest/loopd1-1.loop.db:/root/.loop/tmp/loop.db
+      - ${PWD}/dev/lnd/loop/regtest/loopd1-1.tls.key:/root/.loop/tmp/tls.key
+      - ${PWD}/dev/lnd/loop/regtest/loopd1-1.tls.cert:/root/.loop/tmp/tls.cert
+      - ${PWD}/dev/lnd/loop/regtest/loopd1-1.loop.macaroon:/root/.loop/tmp/loop.macaroon
+    depends_on:
+      - lnd1
+      - loopserver
+    environment:
+      - LOOP_SERVER_INTERNAL_IP=${LOOP_SERVER_INTERNAL_IP}
+    command: bash -c "
+      mkdir -p /root/.loop/regtest/ &&
+      cp /root/.loop/tmp/* /root/.loop/regtest/ &&
+      loopd\
+      --network=regtest\
+      --debuglevel=debug\
+      --server.host=${LOOP_SERVER_INTERNAL_IP}:11009\
+      --server.notls --lnd.host=lnd1:10009\
+      --lnd.macaroonpath=/root/.lnd/lnd1.admin.macaroon\
+      --lnd.tlspath=/root/.lnd/tls.cert\
+      --tlsautorefresh\
+      --restlisten=0.0.0.0:8081\
+      --rpclisten=0.0.0.0:11010"
+  loopd2:
+    image: lightninglabs/loop:v0.20.1-beta
+    restart: unless-stopped
+    volumes:
+      - ${PWD}/dev/lnd/lnd.conf:/root/.lnd/lnd.conf
+      - ${PWD}/dev/lnd/tls.key:/root/.lnd/tls.key
+      - ${PWD}/dev/lnd/tls.cert:/root/.lnd/tls.cert
+      - ${PWD}/dev/lnd/regtest/lnd2.admin.macaroon:/root/.lnd/lnd2.admin.macaroon
+      - ${PWD}/dev/lnd/loop/regtest/loopd2-1.macaroons.db:/root/.loop/tmp/macaroons.db
+      - ${PWD}/dev/lnd/loop/regtest/loopd2-1.loop.db:/root/.loop/tmp/loop.db
+      - ${PWD}/dev/lnd/loop/regtest/loopd2-1.tls.key:/root/.loop/tmp/tls.key
+      - ${PWD}/dev/lnd/loop/regtest/loopd2-1.tls.cert:/root/.loop/tmp/tls.cert
+      - ${PWD}/dev/lnd/loop/regtest/loopd2-1.loop.macaroon:/root/.loop/tmp/loop.macaroon
+    depends_on:
+      - lnd2
+      - loopserver
+    environment:
+      - LOOP_SERVER_INTERNAL_IP=${LOOP_SERVER_INTERNAL_IP}
+    command: bash -c "
+      mkdir -p /root/.loop/regtest/ &&
+      cp /root/.loop/tmp/* /root/.loop/regtest/ &&
+      loopd\
+      --network=regtest\
+      --debuglevel=debug\
+      --server.host=${LOOP_SERVER_INTERNAL_IP}:11009\
+      --server.notls --lnd.host=lnd2:10009\
+      --lnd.macaroonpath=/root/.lnd/lnd2.admin.macaroon\
+      --lnd.tlspath=/root/.lnd/tls.cert\
+      --tlsautorefresh\
+      --restlisten=0.0.0.0:8081\
+      --rpclisten=0.0.0.0:11010"
+  e2e-tests:
+    image: us.gcr.io/galoy-org/nodejs-concourse
+    depends_on:
+      - integration-deps
+    command: ["make", "execute-e2e-from-within-container"]
+    working_dir: /repo
+    env_file:
+      - ${TMP_ENV_CI:-.env.ci}
+    volumes:
+      - ./:/repo
+  integration-tests:
+    image: us.gcr.io/galoy-org/nodejs-concourse
+    depends_on:
+      - integration-deps
+    command: ["make", "execute-integration-from-within-container"]
+    working_dir: /repo
+    env_file:
+      - ${TMP_ENV_CI:-.env.ci}
+    volumes:
+      - ./:/repo
+  stablesats:
+    image: us.gcr.io/galoy-org/stablesats-rs:latest
+    command: ["stablesats", "run"]
+    working_dir: /repo/dev
+    depends_on:
+      - otel-agent
+      - redis
+      - mongodb
+    restart: on-failure:10
+    volumes:
+      - ./:/repo
+
+  oathkeeper:
+    image: oryd/oathkeeper:v0.40
+    command: serve -c /home/ory/oathkeeper.yml --sqa-opt-out
+    volumes:
+      - type: bind
+        source: dev/ory
+        target: /home/ory
+
+  kratos:
+    image: oryd/kratos:v0.10.1
+    entrypoint: sh -c
+    command: '"kratos migrate sql up -y -e && kratos serve -c /home/ory/kratos.yml --sqa-opt-out"'
+    environment:
+      DSN: postgres://dbuser:secret@kratos-pg:5432/default?sslmode=disable
+    links:
+      - kratos-pg:kratos-pg
+    volumes:
+      - type: bind
+        source: dev/ory
+        target: /home/ory
+  kratos-pg:
+    image: postgres:14.1
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=dbuser
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=default

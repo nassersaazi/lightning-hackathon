@@ -1,0 +1,61 @@
+log:
+  level: debug
+  format: json
+
+authenticators:
+  bearer_token:
+    enabled: true
+    config:
+      check_session_url: http://e2e-tests:4012/auth/validatetoken
+
+  anonymous:
+    enabled: true
+    config:
+      subject: anon
+
+  # TODO: for follow up PR and activating web wallet
+  # cookie_session:
+  #   enabled: true
+  #   config:
+  #     # TODO cluster-internal mTLS
+  #     check_session_url: http://kratos:4433/sessions/whoami
+  #     preserve_path: true
+  #     subject_from: identity.id
+  #     extra_from: identity.traits
+
+  unauthorized:
+    enabled: true
+
+authorizers:
+  allow:
+    enabled: true
+
+mutators:
+  id_token:
+    enabled: true
+    config:
+      jwks_url: file:///home/ory/jwks.json
+      issuer_url: "galoy.io"
+
+  noop:
+    enabled: true
+
+  header:
+    enabled: true
+    config:
+      headers:
+        orgauthorization: '{{ .MatchContext.Header.Get "Authorization" }}' # tmp during migration of LegacyJWT
+
+errors:
+  fallback:
+    - json
+  handlers:
+    json:
+      enabled: true
+      config:
+        verbose: true
+
+access_rules:
+  repositories:
+    - file:///home/ory/oathkeeper_rules.yaml
+  matching_strategy: regexp

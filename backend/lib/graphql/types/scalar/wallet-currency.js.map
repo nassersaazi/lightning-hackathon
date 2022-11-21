@@ -1,0 +1,1 @@
+{"version":3,"file":"wallet-currency.js","sourceRoot":"","sources":["../../../../src/graphql/types/scalar/wallet-currency.ts"],"names":[],"mappings":";;AAAA,0CAAmC;AAEnC,MAAM,cAAc,GAAG,UAAE,CAAC,IAAI,CAAC;IAC7B,IAAI,EAAE,gBAAgB;IACtB,MAAM,EAAE;QACN,GAAG,EAAE,EAAE;QACP,GAAG,EAAE,EAAE;KACR;CACF,CAAC,CAAA;AAEF,kBAAe,cAAc,CAAA"}

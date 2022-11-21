@@ -1,0 +1,1 @@
+{"version":3,"file":"network.js","sourceRoot":"","sources":["../../../../src/graphql/types/scalar/network.ts"],"names":[],"mappings":";;AAAA,0CAAmC;AAEnC,MAAM,OAAO,GAAG,UAAE,CAAC,IAAI,CAAC;IACtB,IAAI,EAAE,SAAS;IACf,MAAM,EAAE;QACN,OAAO,EAAE,EAAE;QACX,OAAO,EAAE,EAAE;QACX,MAAM,EAAE,EAAE;QACV,OAAO,EAAE,EAAE;KACZ;CACF,CAAC,CAAA;AAEF,kBAAe,OAAO,CAAA"}
